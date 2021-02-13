@@ -1,0 +1,173 @@
+zabbix_export:
+  version: '5.2'
+  date: '2021-02-13T23:09:49Z'
+  media_types:
+    -
+      name: Glpi
+      type: WEBHOOK
+      parameters:
+        3:
+          name: glpi_apptoken
+          value: xxxxx
+        5:
+          name: glpi_entities_id
+          value: '1'
+        7:
+          name: glpi_impact
+          value: '3'
+        9:
+          name: glpi_itilcategories_id
+          value: '1'
+        2:
+          name: glpi_password
+          value: glpi
+        8:
+          name: glpi_priority
+          value: '3'
+        6:
+          name: glpi_urgency
+          value: '3'
+        4:
+          name: glpi_url
+          value: 'https://your_glpi_url/glpi/apirest.php/'
+        1:
+          name: glpi_user
+          value: glpi
+        0:
+          name: HTTPProxy
+          value: ''
+        10:
+          name: Message
+          value: '{ALERT.MESSAGE}'
+        11:
+          name: Subject
+          value: '{ALERT.SUBJECT}'
+        12:
+          name: To
+          value: '{ALERT.SENDTO}'
+      script: |
+        var params = JSON.parse(value);
+        
+        function GetSession(){
+            try{
+                var userpass = params.glpi_user + ':' + params.glpi_password;
+                req = new CurlHttpRequest();
+                proxy = params.HTTPProxy;
+                req.SetProxy(proxy);
+                req.AddHeader('Content-Type: application/json');
+                req.AddHeader('Authorization: Basic '+ btoa(userpass));
+                req.AddHeader('App-Token: '+params.glpi_apptoken);
+                resp = req.Get(params.glpi_url+'initSession');
+        
+                if (req.Status() != 200) {
+                    Zabbix.Log(4, '[GLPI Webhook] login failed: ' + resp);
+                    throw 'Response: '+req.Status();
+                }
+                resp = JSON.parse(resp);
+                //throw(resp.session_token);
+                return resp.session_token;
+                
+            }
+            catch (error) {
+                Zabbix.Log(4, '[GLPI Webhook] login failed: ' + error);
+                throw 'Login failed: ' + error + '.';
+            }
+        }
+        
+        function CreateTicket(session_token){
+            try{
+                req = new CurlHttpRequest();
+                fields = {};
+                proxy = params.HTTPProxy;
+                req.SetProxy(proxy);
+                req.AddHeader('Content-Type: application/json');
+                req.AddHeader('Session-Token: '+ session_token);
+                req.AddHeader('App-Token: '+params.glpi_apptoken);
+                fields.input = {"name": params.Subject ,"content": params.Message, "itilcategories_id": params.glpi_itilcategories_id,"entities_id":params.glpi_entities_id,"urgency":params.glpi_urgency,"impact":params.glpi_impact,"priority":params.glpi_priority,"_users_id_assign":params.To }
+                resp = req.Post(params.glpi_url+'Ticket',JSON.stringify({"input":fields.input}));
+                Zabbix.Log(4, '[GLPI Webhook] CreateTicket response: ' + resp);
+        
+                if (req.Status() != 201) {
+                    Zabbix.Log(4, '[GLPI Webhook] CreateTicket failed: ' + resp);
+                    throw 'Response: '+req.Status();
+                }
+        
+        
+            }
+            catch (error) {
+                Zabbix.Log(4, '[GLPI Webhook] CreateTicket failed: ' + error);
+                throw 'CreateTicket failed: ' + error + '.';
+            }
+        }
+        
+        function KillSession(session_token){
+            try{
+                req = new CurlHttpRequest();
+                proxy = params.HTTPProxy;
+                req.SetProxy(proxy);
+                req.AddHeader('Content-Type: application/json');
+                req.AddHeader('Session-Token: '+ session_token);
+                req.AddHeader('App-Token: '+params.glpi_apptoken);
+                resp = req.Get(params.glpi_url+'killSession');
+                Zabbix.Log(4, '[GLPI Webhook] KillSession response: ' + resp);
+        
+                if (req.Status() != 200) {
+                    Zabbix.Log(4, '[GLPI Webhook] KillSession failed: ' + resp);
+                    throw 'Response: '+req.Status();
+                }
+            }
+            catch (error) {
+                Zabbix.Log(4, '[GLPI Webhook] KillSession failed: ' + error);
+                throw 'KillSession failed: ' + error + '.';
+            }    
+        }
+        
+        try {	
+        	if (params.glpi_user === "") {
+                throw 'Incorrect value is given for parameter "glpi_user": parameter is missing';
+            }
+            if (params.glpi_password === "") {
+                throw 'Incorrect value is given for parameter "password": parameter is missing';
+            }
+            if (params.glpi_apptoken === "") {
+                throw 'Incorrect value is given for parameter "glpi_apptoken": parameter is missing';
+            }
+            if (params.glpi_url === "") {
+                throw 'Incorrect value is given for parameter "glpi_url": parameter is missing';
+            }	
+        	session = GetSession();
+            Zabbix.Log(4, '[GLPI Webhook] Login OK session_token: ' + resp);
+            CreateTicket(session);
+            KillSession(session);
+            
+            return "OK";
+        }
+        catch (error) {
+            Zabbix.Log(4, '[GLPI Webhook] notification failed: ' + error);
+            throw 'Sending failed: ' + error + '.';
+        }
+      description: |
+        Develop by: Andrey Amado for AKA Sistemas
+        Help: andreyamado@akasistemas.com
+        
+        The documentation can be found on:
+        https://yourglpirootlocation/apirest.php/
+        
+        Additionally, you must enable the API access from glpi and activate the user authentication and app token.
+        
+        Adjust the parameters according to your installation.
+        The "To" parameter must be the id_user from GLPI.
+        
+      message_templates:
+        -
+          event_source: TRIGGERS
+          operation_mode: PROBLEM
+          subject: 'Problem: {EVENT.NAME}'
+          message: |
+            Problem started at {EVENT.TIME} on {EVENT.DATE}
+            Problem name: {EVENT.NAME}
+            Host: {HOST.NAME}
+            Severity: {EVENT.SEVERITY}
+            Operational data: {EVENT.OPDATA}
+            Original problem ID: {EVENT.ID}
+            {TRIGGER.URL}
