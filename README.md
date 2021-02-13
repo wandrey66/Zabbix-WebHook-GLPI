@@ -3,6 +3,7 @@
 Zabbix WebHook GLPI
 
 Develop by: Andrey Amado for AKA Sistemas
+
 Help: andreyamado@akasistemas.com
        
 The documentation can be found on:
