@@ -13,3 +13,7 @@ Additionally, you must enable the API access from glpi and activate the user aut
         
 Adjust the parameters according to your installation.
 The "To" parameter must be the id_user from GLPI.
+
+V2 what is the new:
+- add update and close support ticket
+- add URL zabbix trigger into the ticket.
